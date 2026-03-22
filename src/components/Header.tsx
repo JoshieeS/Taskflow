@@ -17,7 +17,7 @@ function getGreeting() {
   const h = new Date().getHours()
   if (h < 12) return 'good morning,'
   if (h < 17) return 'good afternoon,'
-  return 'good night,'
+  return 'good evening,'
 }
 
 function formatDate() {
