@@ -54,7 +54,7 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName
       if (e.key === 'Escape') close()
-      if (e.key === 'Enter' && tag !== 'TEXTAREA') submit()
+      if (e.key === 'Enter') submit()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
