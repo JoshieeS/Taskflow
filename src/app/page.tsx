@@ -37,7 +37,7 @@ export default function HomePage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [notifStatus, setNotifStatus] = useState<NotifStatus>('idle')
-
+  const [userName, setUserName] = useState<string>('')
   // UI state
   const [tab, setTab] = useState<TabId>('today')
   const [filter, setFilter] = useState<'pending' | 'done'>('pending')
@@ -46,6 +46,35 @@ export default function HomePage() {
 
   // Real-time tasks from our custom hook
   const { tasks, loading, addTask, updateTask, deleteTask, isOnline } = useTasks(userId)
+  console.log(showAdd)
+  
+  // ── Get User Details ──────────────────────────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error?.message?.includes('Refresh Token Not Found') ||
+        error?.message?.includes('Invalid Refresh Token')) {
+        supabase.auth.signOut()
+        setUserId(null)
+        setAuthReady(true)
+        return
+      }
+
+      setUserId(session?.user.id ?? null)
+      const meta = session?.user?.user_metadata
+      setUserName(meta?.name ?? meta?.full_name ?? meta?.email ?? '')
+      setAuthReady(true)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUserId(session?.user.id ?? null)
+        const meta = session?.user?.user_metadata
+        setUserName(meta?.name ?? meta?.full_name ?? meta?.email ?? '')
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   // ── Notification Check ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -61,24 +90,6 @@ export default function HomePage() {
     })
   }, [])
 
-  // ── Auth check on mount ────────────────────────────────────────────────
-  useEffect(() => {
-    // Get existing session (reads the cookie Supabase set on last login)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserId(session?.user.id ?? null)
-      setAuthReady(true)
-    })
-
-    // Subscribe to auth changes (login / logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUserId(session?.user.id ?? null)
-      }
-    )
-
-    // Cleanup: unsubscribe when component unmounts
-    return () => subscription.unsubscribe()
-  }, [])
 
   // ── Computed values ────────────────────────────────────────────────────
   const todayTasks = tasks.filter(t => t.due === 'today')
@@ -134,22 +145,6 @@ export default function HomePage() {
     setNotifStatus('subscribed')
   }
 
-  // ── Login handler ──────────────────────────────────────────────────────
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
-  const [authErr, setAuthErr] = useState('')
-
-  const handleAuth = async () => {
-    setAuthErr('')
-    const { error } =
-      authMode === 'signup'
-        ? await supabase.auth.signUp({ email, password })
-        : await supabase.auth.signInWithPassword({ email, password })
-
-    if (error) setAuthErr(error.message)
-  }
-
   // ── Not ready yet ──────────────────────────────────────────────────────
   if (!authReady) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>
@@ -179,6 +174,7 @@ export default function HomePage() {
           doneCount={doneToday.length}
           urgentCount={tasks.filter(t => t.priority === 'high' && !t.done).length}
           progress={progress}
+          userName={userName}
         />
 
         {(tab === 'today' || tab === 'all') && (
@@ -281,6 +277,7 @@ export default function HomePage() {
           onClose={() => setDetail(null)}
           onToggle={(id) => updateTask(id, { done: !detail.done })}
           onDelete={deleteTask}
+          onUpdate={updateTask}
         />
       )}
     </div>

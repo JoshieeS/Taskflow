@@ -7,7 +7,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 // This runs once when the module loads on the server.
 // It configures the web-push library with your identity and keys.
 webpush.setVapidDetails(
-  'mailto:joshuaarindha@gmail.com',          // replace with your actual email
+  'mailto:joshuaarindha@gmail.com',         
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 )

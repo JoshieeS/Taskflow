@@ -139,7 +139,6 @@ export function useTasks(userId: string | null) {
         .order('created_at', { ascending: false })
 
       if (fetchErr) {
-        // Network failed — we still have local data, just flag the error
         setError(fetchErr.message)
         setLoading(false)
         return

@@ -1,51 +1,81 @@
 'use client'
- 
-import { useState, useEffect } from 'react'
+
+import { useState, useEffect, useRef } from 'react'
 import type { NewTask } from '@/types'
 import DatePicker from '@/components/DatePicker'
- 
+
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 const PRIORITIES = ['high', 'medium', 'low'] as const
-const DUE_OPTIONS = ['today', 'this week', 'someday'] as const
- 
-interface AddSheetProps {
-  onClose : () => void
-  onAdd   : (task: NewTask) => void
-}
- 
+
 const INITIAL_FORM: NewTask = {
   title: '', category: 'personal', priority: 'medium',
   due: 'today', notes: '', done: false,
 }
- 
+
+interface AddSheetProps {
+  onClose: () => void
+  onAdd: (task: NewTask) => void
+}
+
 export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
   const [form, setForm] = useState<NewTask>(INITIAL_FORM)
- 
-  const submit = () => {
-    if (!form.title.trim()) return
-    onAdd(form)
+  const [closing, setClosing] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
+
+  const close = () => {
+    if (closing) return
+    setClosing(true)
+    timerRef.current = setTimeout(onClose, 240)
   }
- 
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current)
+      }
+    }
+  }, [])
+
+  const submit = () => {
+    console.log('[AddSheet] submit fired — title:', form.title, '| due:', form.due)
+    if (!form.title.trim()) {
+      console.log('[AddSheet] submit aborted — empty title')
+      return
+    }
+    setClosing(true)
+    timerRef.current = setTimeout(() => {
+      console.log('[AddSheet] onAdd called with form:', form)
+      onAdd(form)
+      onClose()
+    }, 240)
+  }
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit()
+      const tag = (e.target as HTMLElement).tagName
+      if (e.key === 'Escape') close()
+      if (e.key === 'Enter' && tag !== 'TEXTAREA') submit()
     }
     window.addEventListener('keydown', handler)
-    // Cleanup: runs when sheet unmounts, removing the listener
     return () => window.removeEventListener('keydown', handler)
-  }, [form])  // form in deps so `submit` inside handler captures latest form state
- 
+  }, [form, closing])
+
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={e => e.stopPropagation()}>
+    <div
+      className={`overlay${closing ? ' closing' : ''}`}
+      onClick={e => { if (e.target === e.currentTarget) close() }}
+    >
+      <div className={`sheet${closing ? ' closing' : ''}`}>
         <div className="sheet-handle" />
         <div className="sheet-header">
-          <button className="sheet-btn cancel" onClick={onClose}>cancel</button>
+          <button className="sheet-btn cancel" onClick={close}>cancel</button>
           <span className="sheet-title">new task</span>
-          <button className="sheet-btn add" onClick={submit}>add</button>
+          <button className="sheet-btn add" onClick={() => {
+            console.log('[AddSheet] add button clicked')
+            submit()
+          }}>add</button>
         </div>
- 
+
         <div className="form-block">
           <div className="form-label">title</div>
           <input
@@ -56,7 +86,7 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
             autoFocus
           />
         </div>
- 
+
         <div className="form-block" style={{ marginTop: 18 }}>
           <div className="form-label">priority</div>
           <div className="chip-row">
@@ -69,7 +99,7 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
             ))}
           </div>
         </div>
- 
+
         <div className="form-block" style={{ marginTop: 18 }}>
           <div className="form-label">category</div>
           <div className="chip-row">
@@ -82,12 +112,18 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
             ))}
           </div>
         </div>
- 
+
         <div className="form-block" style={{ marginTop: 18 }}>
           <div className="form-label">due</div>
-          <DatePicker value={form.due} onChange={(val) => setForm(p => ({ ...p, due:val}))}/>
+          <DatePicker
+            value={form.due}
+            onChange={val => {
+              console.log('[AddSheet] DatePicker onChange received:', val)
+              setForm(p => ({ ...p, due: val }))
+            }}
+          />
         </div>
- 
+
         <div className="form-block" style={{ marginTop: 18 }}>
           <div className="form-label">notes // optional</div>
           <textarea
@@ -98,9 +134,8 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
             onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
           />
         </div>
- 
+
         <div className="kbd-hint" style={{ padding: '16px 24px 0' }}>
-          <span className="kbd">⌘</span><span>+</span>
           <span className="kbd">↵</span><span>to add · </span>
           <span className="kbd">esc</span><span>to cancel</span>
         </div>

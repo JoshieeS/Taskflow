@@ -1,24 +1,25 @@
 'use client'
- 
+
 import type { TabId } from '@/types'
- 
+
 interface HeaderProps {
-  tab           : TabId
-  filter        : 'pending' | 'done'
+  tab: TabId
+  filter: 'pending' | 'done'
   onFilterChange: (f: 'pending' | 'done') => void
-  pendingCount  : number
-  doneCount     : number
-  urgentCount   : number
-  progress      : number
+  pendingCount: number
+  doneCount: number
+  urgentCount: number
+  progress: number
+  userName: string
 }
- 
+
 function getGreeting() {
   const h = new Date().getHours()
   if (h < 12) return 'good morning,'
   if (h < 17) return 'good afternoon,'
   return 'good night,'
 }
- 
+
 function formatDate() {
   return new Date()
     .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -27,39 +28,39 @@ function formatDate() {
 
 function formatYear() {
   return new Date()
-  .toLocaleDateString('en-GB', {year: '2-digit'})
+    .toLocaleDateString('en-GB', { year: '2-digit' })
 }
- 
+
 export default function Header({
   tab, filter, onFilterChange,
-  pendingCount, doneCount, urgentCount, progress
+  pendingCount, doneCount, urgentCount, progress, userName
 }: HeaderProps) {
   return (
     <div className="app-header">
       <div className="header-top">
         <div className="wordmark">task<span>flow</span></div>
-        <div className="date-block">
-          <div>{getGreeting()} josh</div>
+        <div className="date-block" style={{ marginLeft: 'auto'}}>
+          <div>{getGreeting()} {userName ? userName.split(' ')[0].toLowerCase() : '...'}</div>
           <div>{formatDate()}</div>
           <div>{formatYear()}</div>
         </div>
       </div>
- 
+
       <div className="hero-title">
         {pendingCount === 0 ? 'all done.' : `${pendingCount} task${pendingCount !== 1 ? 's' : ''} left.`}
       </div>
- 
+
       <div className="hero-sub">
         today — <span>{doneCount} completed</span> · <span>{urgentCount} urgent</span>
       </div>
- 
+
       <div className="prog-row">
         <div className="prog-track">
           <div className="prog-fill" style={{ width: `${progress}%` }} />
         </div>
         <div className="prog-pct">{progress}%</div>
       </div>
- 
+
       {tab === 'today' && (
         <div className="tabs">
           {(['pending', 'done'] as const).map(f => (
@@ -74,7 +75,7 @@ export default function Header({
           ))}
         </div>
       )}
- 
+
       <div className="kbd-hint">
         <span className="kbd">n</span><span>new task</span>
       </div>
