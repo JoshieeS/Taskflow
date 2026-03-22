@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import type { Task } from '@/types'
-import DatePicker from '@/components/DatePicker'
+import DatePicker, { resolveQuickOption } from '@/components/DatePicker'
 
 const PRIORITY_DOTS: Record<string, string> = {
   high: '#c0392b', medium: '#b7791f', low: '#2d6a4f',
@@ -21,8 +21,12 @@ interface DetailSheetProps {
 }
 
 function formatDue(due: string): string {
-  if (['today', 'this week', 'someday'].includes(due)) return due
+  if (['someday'].includes(due)) return due
+  // Legacy 'today' string or actual today's ISO
+  const todayISO = new Date().toISOString().split('T')[0]
+  if (due === 'today' || due === todayISO) return 'due today'
   const date = new Date(due + 'T00:00:00')
+  if (isNaN(date.getTime())) return due
   return date.toLocaleDateString('en-GB', {
     day: 'numeric', month: 'short', year: 'numeric'
   }).toLowerCase()
@@ -42,9 +46,11 @@ export default function DetailSheet({
     due:      task.due,
     notes:    task.notes,
   })
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
-  // Sync form if real-time updates the task while sheet is open
+  // ← correct: include null in the generic so initial null value is valid
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keep form in sync with real-time updates when not editing
   useEffect(() => {
     if (!editing) {
       setForm({
@@ -65,15 +71,18 @@ export default function DetailSheet({
 
   useEffect(() => {
     return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current)
-      }
+      if (timerRef.current !== null) clearTimeout(timerRef.current)
     }
   }, [])
 
   const saveEdits = () => {
     if (!form.title.trim()) return
-    onUpdate(task.id, form)
+    // Resolve quick options to real ISO dates before saving,
+    // same as AddSheet does on submit
+    onUpdate(task.id, {
+      ...form,
+      due: resolveQuickOption(form.due),
+    })
     close()
   }
 
@@ -98,7 +107,7 @@ export default function DetailSheet({
       <div className={`sheet${closing ? ' closing' : ''}`}>
         <div className="sheet-handle" />
 
-        {/* ── Header row ── */}
+        {/* ── Header ── */}
         <div className="sheet-header">
           {editing ? (
             <button className="sheet-btn cancel" onClick={() => setEditing(false)}>cancel</button>
@@ -123,7 +132,7 @@ export default function DetailSheet({
                 <span style={{
                   width: 5, height: 5, borderRadius: '50%',
                   background: PRIORITY_DOTS[task.priority],
-                  display: 'inline-block'
+                  display: 'inline-block',
                 }} />
                 {task.priority}
               </span>

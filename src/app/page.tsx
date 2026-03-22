@@ -90,15 +90,21 @@ export default function HomePage() {
     })
   }, [])
 
-
+  function toISO(date: Date): string {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
   // ── Computed values ────────────────────────────────────────────────────
-  const todayISO = new Date().toISOString().split('T')[0]  // '2026-03-22'
+  const todayISO = toISO(new Date())
 
   const todayTasks = tasks.filter(t => {
-    if (t.due === 'today') return true
-    if (t.due !== 'this week' && t.due !== 'someday') {
-      return t.due <= todayISO
-    }
+    if (t.due === 'someday') return false
+    if (t.due === 'today') return true  // legacy
+    if (t.due === todayISO) return true
+    // overdue: any past ISO date
+    if (t.due.match(/^\d{4}-\d{2}-\d{2}$/) && t.due < todayISO) return true
     return false
   })
 
@@ -108,12 +114,29 @@ export default function HomePage() {
     ? Math.round((doneToday.length / todayTasks.length) * 100)
     : 0
 
+  // Source pool for pending/done tabs
   const pool = filter === 'today' ? todayTasks : tasks
 
+  // All tasks sorted: done first, then pending, each group sorted by due date
+  const sortByDue = (a: Task, b: Task) => {
+    const resolve = (due: string) => {
+      if (due === 'someday') return '9999-12-31'
+      if (due === 'today') return todayISO   // legacy
+      return due
+    }
+    return resolve(a.due).localeCompare(resolve(b.due))
+  }
+
   const displayed =
-    tab === 'pending' ? pool.filter(t => !t.done) :
-      tab === 'done' ? pool.filter(t => t.done) :
-        tasks
+    tab === 'pending'
+      ? [...pool.filter(t => !t.done)].sort(sortByDue)
+      : tab === 'done'
+        ? [...pool.filter(t => t.done)].sort(sortByDue)
+        : [
+          // all tab: done first, then pending, each sorted by due date
+          ...[...tasks.filter(t => t.done)].sort(sortByDue),
+          ...[...tasks.filter(t => !t.done)].sort(sortByDue),
+        ]
 
   // ── Push Notifications ──────────────────────────────────────────────────────      
   const handleNotificationToggle = async () => {

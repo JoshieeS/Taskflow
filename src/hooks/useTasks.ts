@@ -23,8 +23,7 @@ export function useTasks(userId: string | null) {
 
   const supabase = createBrowserClient()
   const syncing = useRef(false)
-  // Keep a ref to tasks so mutation callbacks see current state without
-  // needing tasks in their dependency arrays (avoids stale closure bugs)
+  
   const tasksRef = useRef<Task[]>([])
   tasksRef.current = tasks
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import type { NewTask } from '@/types'
-import DatePicker from '@/components/DatePicker'
+import DatePicker, { resolveQuickOption } from '@/components/DatePicker'
 
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 const PRIORITIES = ['high', 'medium', 'low'] as const
@@ -14,11 +14,11 @@ const INITIAL_FORM: NewTask = {
 
 interface AddSheetProps {
   onClose: () => void
-  onAdd: (task: NewTask) => void
+  onAdd  : (task: NewTask) => void
 }
 
 export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
-  const [form, setForm] = useState<NewTask>(INITIAL_FORM)
+  const [form,    setForm]    = useState<NewTask>(INITIAL_FORM)
   const [closing, setClosing] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
@@ -37,15 +37,15 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
   }, [])
 
   const submit = () => {
-    console.log('[AddSheet] submit fired — title:', form.title, '| due:', form.due)
-    if (!form.title.trim()) {
-      console.log('[AddSheet] submit aborted — empty title')
-      return
+    if (!form.title.trim()) return
+    const resolvedForm: NewTask = {
+      ...form,
+      due: resolveQuickOption(form.due),
     }
+
     setClosing(true)
     timerRef.current = setTimeout(() => {
-      console.log('[AddSheet] onAdd called with form:', form)
-      onAdd(form)
+      onAdd(resolvedForm)
       onClose()
     }, 240)
   }
@@ -54,7 +54,7 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName
       if (e.key === 'Escape') close()
-      if (e.key === 'Enter') submit()
+      if (e.key === 'Enter' && tag !== 'TEXTAREA') submit()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -70,10 +70,7 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
         <div className="sheet-header">
           <button className="sheet-btn cancel" onClick={close}>cancel</button>
           <span className="sheet-title">new task</span>
-          <button className="sheet-btn add" onClick={() => {
-            console.log('[AddSheet] add button clicked')
-            submit()
-          }}>add</button>
+          <button className="sheet-btn add" onClick={submit}>add</button>
         </div>
 
         <div className="form-block">
@@ -117,10 +114,7 @@ export default function AddSheet({ onClose, onAdd }: AddSheetProps) {
           <div className="form-label">due</div>
           <DatePicker
             value={form.due}
-            onChange={val => {
-              console.log('[AddSheet] DatePicker onChange received:', val)
-              setForm(p => ({ ...p, due: val }))
-            }}
+            onChange={val => setForm(p => ({ ...p, due: val }))}
           />
         </div>
 
