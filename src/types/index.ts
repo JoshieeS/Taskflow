@@ -18,4 +18,4 @@ export interface Task {
 
 export type NewTask = Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>
 
-export type TabId = 'today' | 'all' | 'stats' | 'config'
+export type TabId = 'pending' | 'done' | 'stats' | 'config'

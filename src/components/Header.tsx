@@ -4,8 +4,8 @@ import type { TabId } from '@/types'
 
 interface HeaderProps {
   tab: TabId
-  filter: 'pending' | 'done'
-  onFilterChange: (f: 'pending' | 'done') => void
+  filter: 'today' | 'all'
+  onFilterChange: (f: 'today' | 'all') => void
   pendingCount: number
   doneCount: number
   urgentCount: number
@@ -61,9 +61,9 @@ export default function Header({
         <div className="prog-pct">{progress}%</div>
       </div>
 
-      {tab === 'today' && (
+      {(tab === 'pending' || tab === 'done') && (
         <div className="tabs">
-          {(['pending', 'done'] as const).map(f => (
+          {(['today', 'all'] as const).map(f => (
             <button
               key={f}
               className={`tab${filter === f ? ' active' : ''}`}

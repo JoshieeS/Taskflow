@@ -8,8 +8,8 @@ interface NavProps {
 }
  
 const NAV_ITEMS: { id: TabId; label: string; icon: string }[] = [
-  { id: 'today',  label: 'today',  icon: '✓' },
-  { id: 'all',    label: 'all',    icon: '≡' },
+  { id: 'pending',  label: 'pending',  icon: '✓' },
+  { id: 'done',    label: 'done',    icon: '≡' },
   { id: 'stats',  label: 'stats',  icon: '◦' },
   { id: 'config', label: 'config', icon: '⚙' },
 ]

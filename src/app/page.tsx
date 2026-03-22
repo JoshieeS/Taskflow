@@ -39,8 +39,8 @@ export default function HomePage() {
   const [notifStatus, setNotifStatus] = useState<NotifStatus>('idle')
   const [userName, setUserName] = useState<string>('')
   // UI state
-  const [tab, setTab] = useState<TabId>('today')
-  const [filter, setFilter] = useState<'pending' | 'done'>('pending')
+  const [tab, setTab] = useState<TabId>('pending')
+  const [filter, setFilter] = useState<'today' | 'all'>('today')
   const [showAdd, setShowAdd] = useState(false)
   const [detail, setDetail] = useState<Task | null>(null)
 
@@ -101,17 +101,19 @@ export default function HomePage() {
     }
     return false
   })
-  
+
   const pendingToday = todayTasks.filter(t => !t.done)
   const doneToday = todayTasks.filter(t => t.done)
   const progress = todayTasks.length
     ? Math.round((doneToday.length / todayTasks.length) * 100)
     : 0
 
+  const pool = filter === 'today' ? todayTasks : tasks
+
   const displayed =
-    tab === 'today' ? (filter === 'pending' ? pendingToday : doneToday) :
-      tab === 'all' ? tasks :
-        tasks.filter(t => t.done)
+    tab === 'pending' ? pool.filter(t => !t.done) :
+      tab === 'done' ? pool.filter(t => t.done) :
+        tasks
 
   // ── Push Notifications ──────────────────────────────────────────────────────      
   const handleNotificationToggle = async () => {
@@ -186,7 +188,7 @@ export default function HomePage() {
           userName={userName}
         />
 
-        {(tab === 'today' || tab === 'all') && (
+        {(tab === 'pending' || tab === 'done') && (
           <div className="body">
             {loading ? (
               <div className="empty">loading...</div>
