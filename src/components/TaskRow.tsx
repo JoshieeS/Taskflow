@@ -1,20 +1,28 @@
 'use client'
- 
+
 import type { Task } from '@/types'
- 
+
 const PRIORITY_DOTS: Record<string, string> = {
-  high:   '#c0392b',
+  high: '#c0392b',
   medium: '#b7791f',
-  low:    '#2d6a4f',
+  low: '#2d6a4f',
 }
- 
+
 interface TaskRowProps {
-  task   : Task
-  delay? : number
+  task: Task
+  delay?: number
   onToggle: () => void
-  onClick : () => void
+  onClick: () => void
 }
- 
+
+function formatDue(due: string): string {
+  if (['today', 'this week', 'someday'].includes(due)) return due
+  const date = new Date(due + 'T00:00:00')
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short'
+  }).toLowerCase()
+}
+
 export default function TaskRow({ task, delay = 0, onToggle, onClick }: TaskRowProps) {
   return (
     <div
@@ -41,7 +49,7 @@ export default function TaskRow({ task, delay = 0, onToggle, onClick }: TaskRowP
           {task.due !== 'today' && (
             <>
               <span className="meta-tag">·</span>
-              <span className="meta-tag">{task.due}</span>
+              <span className="meta-tag">{formatDue(task.due)}</span>
             </>
           )}
         </div>

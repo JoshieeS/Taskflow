@@ -20,6 +20,14 @@ interface DetailSheetProps {
   onUpdate: (id: string, updates: Partial<Task>) => void
 }
 
+function formatDue(due: string): string {
+  if (['today', 'this week', 'someday'].includes(due)) return due
+  const date = new Date(due + 'T00:00:00')
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric'
+  }).toLowerCase()
+}
+
 export default function DetailSheet({
   task: initialTask, tasks, onClose, onToggle, onDelete, onUpdate
 }: DetailSheetProps) {
@@ -126,7 +134,7 @@ export default function DetailSheet({
             </div>
             <div className="detail-row">
               <span className="detail-key">due</span>
-              <span className="detail-val">{task.due}</span>
+              <span className="detail-val">{formatDue(task.due)}</span>
             </div>
             <div className="detail-row">
               <span className="detail-key">status</span>

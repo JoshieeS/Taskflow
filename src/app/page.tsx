@@ -47,7 +47,7 @@ export default function HomePage() {
   // Real-time tasks from our custom hook
   const { tasks, loading, addTask, updateTask, deleteTask, isOnline } = useTasks(userId)
   console.log(showAdd)
-  
+
   // ── Get User Details ──────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session }, error }) => {
@@ -92,7 +92,16 @@ export default function HomePage() {
 
 
   // ── Computed values ────────────────────────────────────────────────────
-  const todayTasks = tasks.filter(t => t.due === 'today')
+  const todayISO = new Date().toISOString().split('T')[0]  // '2026-03-22'
+
+  const todayTasks = tasks.filter(t => {
+    if (t.due === 'today') return true
+    // Include specific dates that are today or in the past (overdue)
+    if (t.due !== 'this week' && t.due !== 'someday') {
+      return t.due <= todayISO
+    }
+    return false
+  })
   const pendingToday = todayTasks.filter(t => !t.done)
   const doneToday = todayTasks.filter(t => t.done)
   const progress = todayTasks.length

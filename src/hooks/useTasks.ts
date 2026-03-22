@@ -14,18 +14,18 @@ import {
 import type { Task, NewTask } from '@/types'
 
 export function useTasks(userId: string | null) {
-  const [tasks,    setTasks]    = useState<Task[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState<string | null>(null)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   )
 
-  const supabase  = createBrowserClient()
-  const syncing   = useRef(false)
+  const supabase = createBrowserClient()
+  const syncing = useRef(false)
   // Keep a ref to tasks so mutation callbacks see current state without
   // needing tasks in their dependency arrays (avoids stale closure bugs)
-  const tasksRef  = useRef<Task[]>([])
+  const tasksRef = useRef<Task[]>([])
   tasksRef.current = tasks
 
   // ── Sync queue processing ──────────────────────────────────────────────────
@@ -56,7 +56,7 @@ export function useTasks(userId: string | null) {
               await supabase.from('tasks').insert(op.payload)
             } else {
               // Already exists — compare timestamps
-              const localTime  = new Date(op.payload.updated_at!).getTime()
+              const localTime = new Date(op.payload.updated_at!).getTime()
               const remoteTime = new Date(existing.updated_at).getTime()
               if (localTime > remoteTime) {
                 await supabase.from('tasks').update(op.payload).eq('id', op.payload.id)
@@ -74,7 +74,7 @@ export function useTasks(userId: string | null) {
               setTasks(prev => prev.filter(t => t.id !== op.payload.id))
               await deleteLocalTask(op.payload.id)
             } else {
-              const localTime  = new Date(op.payload.updated_at!).getTime()
+              const localTime = new Date(op.payload.updated_at!).getTime()
               const remoteTime = new Date(remote.updated_at).getTime()
 
               if (localTime >= remoteTime) {
@@ -104,13 +104,13 @@ export function useTasks(userId: string | null) {
 
   // ── Online / offline listeners ─────────────────────────────────────────────
   useEffect(() => {
-    const goOnline  = () => { setIsOnline(true);  processQueue() }
+    const goOnline = () => { setIsOnline(true); processQueue() }
     const goOffline = () => { setIsOnline(false) }
 
-    window.addEventListener('online',  goOnline)
+    window.addEventListener('online', goOnline)
     window.addEventListener('offline', goOffline)
     return () => {
-      window.removeEventListener('online',  goOnline)
+      window.removeEventListener('online', goOnline)
       window.removeEventListener('offline', goOffline)
     }
   }, [processQueue])
@@ -124,7 +124,7 @@ export function useTasks(userId: string | null) {
     }
 
     async function initialLoad() {
-      // Step 1: Load from IndexedDB immediately — instant render, no network wait
+      // Step 1: Show local data immediately for instant render
       const local = await getLocalTasks(userId!)
       if (local.length) {
         setTasks(local)
@@ -139,42 +139,83 @@ export function useTasks(userId: string | null) {
         .order('created_at', { ascending: false })
 
       if (fetchErr) {
+        // Offline — keep showing local data
         setError(fetchErr.message)
         setLoading(false)
         return
       }
 
-      // Step 3: Merge — most recent updated_at wins per task
+      // Step 3: Get pending queue to find genuinely offline-created tasks
+      const queue = await getPendingQueue()
+      const pendingInsertIds = new Set(
+        queue
+          .filter(op => op.type === 'INSERT')
+          .map(op => op.payload.id)
+      )
+
+      // Step 4: Supabase is the source of truth when online.
+      // Only add local-only tasks if they have a pending INSERT —
+      // meaning they were created offline and not yet synced.
+      // Any local task NOT in Supabase and NOT in the queue was deleted
+      // on another device — discard it.
       const remoteMap = new Map((remote ?? []).map(t => [t.id, t]))
-      const localMap  = new Map(local.map(t => [t.id, t]))
-      const allIds    = new Set([...remoteMap.keys(), ...localMap.keys()])
+      const localMap = new Map(local.map(t => [t.id, t]))
 
       const merged: Task[] = []
-      for (const id of allIds) {
-        const r = remoteMap.get(id)
-        const l = localMap.get(id)
 
-        if (r && l) {
-          const remoteTime = new Date(r.updated_at).getTime()
-          const localTime  = new Date(l.updated_at).getTime()
-          merged.push(localTime > remoteTime ? l : r as Task)
-        } else if (r) {
-          merged.push(r as Task)
-        } else if (l) {
-          // Local-only means it was added offline and not yet synced
-          merged.push(l)
+      // All remote tasks — these are ground truth
+      for (const remoteTask of remote ?? []) {
+        const localTask = localMap.get(remoteTask.id)
+
+        if (localTask) {
+          // Both exist — check for pending UPDATE that's newer than remote
+          const hasPendingUpdate = queue.some(
+            op => op.type === 'UPDATE' && op.payload.id === remoteTask.id
+          )
+          if (hasPendingUpdate) {
+            const localTime = new Date(localTask.updated_at).getTime()
+            const remoteTime = new Date(remoteTask.updated_at).getTime()
+            merged.push(localTime > remoteTime ? localTask : remoteTask as Task)
+          } else {
+            // No local pending change — trust remote
+            merged.push(remoteTask as Task)
+          }
+        } else {
+          merged.push(remoteTask as Task)
         }
+      }
+
+      // Only keep local-only tasks that have a pending INSERT
+      // (created offline, not yet pushed to Supabase)
+      for (const [id, localTask] of localMap) {
+        if (!remoteMap.has(id) && pendingInsertIds.has(id)) {
+          merged.push(localTask)
+        }
+        // If local-only and NOT in queue → was deleted on another device → discard
       }
 
       merged.sort((a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
 
-      setTasks(merged)
+      // Step 5: Write the authoritative merged state back to IndexedDB
+      // This clears out any stale deleted tasks from local storage
+      const db = await import('@/lib/Offlinestore')
+      const allLocalIds = local.map(t => t.id)
+      const mergedIds = new Set(merged.map(t => t.id))
+
+      // Delete from IndexedDB any local task that didn't make it into merged
+      for (const id of allLocalIds) {
+        if (!mergedIds.has(id)) {
+          await db.deleteLocalTask(id)
+        }
+      }
+
       await setLocalTasks(merged)
+      setTasks(merged)
       setLoading(false)
 
-      // Process any queue built up while offline
+      // Step 6: Process any offline queue now that we're online
       if (navigator.onLine) processQueue()
     }
 
@@ -186,9 +227,9 @@ export function useTasks(userId: string | null) {
       .on(
         'postgres_changes',
         {
-          event:  '*',
+          event: '*',
           schema: 'public',
-          table:  'tasks',
+          table: 'tasks',
           filter: `user_id=eq.${userId}`,
         },
         async (payload) => {
@@ -222,11 +263,11 @@ export function useTasks(userId: string | null) {
   const addTask = useCallback(async (newTask: NewTask) => {
     if (!userId) return
 
-    const now  = new Date().toISOString()
+    const now = new Date().toISOString()
     const task: Task = {
       ...newTask,
-      id:         crypto.randomUUID(),
-      user_id:    userId,
+      id: crypto.randomUUID(),
+      user_id: userId,
       created_at: now,
       updated_at: now,
     }
@@ -240,18 +281,18 @@ export function useTasks(userId: string | null) {
       if (error) console.error('[addTask]', error.message)
     } else {
       await addToPendingQueue({
-        id:        task.id,           // use task id so INSERT coalesces cleanly
-        type:      'INSERT',
-        payload:   task,
+        id: task.id,           // use task id so INSERT coalesces cleanly
+        type: 'INSERT',
+        payload: task,
         timestamp: Date.now(),
       })
     }
   }, [userId])
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
-    const now            = new Date().toISOString()
-    const withTimestamp  = { ...updates, updated_at: now }
-    const current        = tasksRef.current.find(t => t.id === id)
+    const now = new Date().toISOString()
+    const withTimestamp = { ...updates, updated_at: now }
+    const current = tasksRef.current.find(t => t.id === id)
     if (!current) return
 
     const updated = { ...current, ...withTimestamp }
@@ -266,9 +307,9 @@ export function useTasks(userId: string | null) {
     } else {
       // Predictable id = multiple offline updates to same task collapse into one op
       await addToPendingQueue({
-        id:        `update-${id}`,
-        type:      'UPDATE',
-        payload:   updated,
+        id: `update-${id}`,
+        type: 'UPDATE',
+        payload: updated,
         timestamp: Date.now(),
       })
     }
@@ -284,9 +325,9 @@ export function useTasks(userId: string | null) {
       if (error) console.error('[deleteTask]', error.message)
     } else {
       await addToPendingQueue({
-        id:        `delete-${id}`,
-        type:      'DELETE',
-        payload:   { id },
+        id: `delete-${id}`,
+        type: 'DELETE',
+        payload: { id },
         timestamp: Date.now(),
       })
     }
