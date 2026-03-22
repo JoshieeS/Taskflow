@@ -25,6 +25,9 @@
 
   .app-header {
     flex-shrink: 0;
+    padding: calc(var(--safe-top) + 28px) 24px 0;
+    background: var(--bg);
+    z-index: 50;
   }
 }
 
@@ -96,7 +99,7 @@ body {
   grid-area: nav;
   background: var(--bg);
   border-top: 1px solid var(--border);
-  padding: 8px 0 calc(8px + var(--safe-bottom));
+  padding: 8px 0 calc(10px + var(--safe-bottom));
   display: flex;
   justify-content: space-around;
   align-items: flex-start;
