@@ -212,7 +212,15 @@ export default function HomePage() {
         />
 
         {(tab === 'pending' || tab === 'done') && (
-          <div className="body">
+          <div className="body"
+            style={{
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: '0%',
+              minHeight: 0,
+              overflowY: 'auto',
+              padding: '0 24px 80px',
+            }}>
             {loading ? (
               <div className="empty">loading...</div>
             ) : displayed.length === 0 ? (
