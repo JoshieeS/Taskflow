@@ -11,6 +11,7 @@ import DetailSheet from '@/components/DetailSheet'
 import type { Task, TabId } from '@/types'
 import { subscribeUser, unsubscribeUser } from '@/app/actions'
 import AuthScreen from '@/components/AuthScreen'
+import ExportSheet from '@/components/ExportSheet'
 
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 
@@ -43,7 +44,7 @@ export default function HomePage() {
   const [filter, setFilter] = useState<'today' | 'all'>('today')
   const [showAdd, setShowAdd] = useState(false)
   const [detail, setDetail] = useState<Task | null>(null)
-
+  const [showExport, setShowExport] = useState(false)
   // Real-time tasks from our custom hook
   const { tasks, loading, addTask, updateTask, deleteTask, isOnline } = useTasks(userId)
   console.log(showAdd)
@@ -212,7 +213,7 @@ export default function HomePage() {
         />
 
         {(tab === 'pending' || tab === 'done') && (
-          <div className="body"
+          <div className="body scrollbar"
             style={{
               flexGrow: 1,
               flexShrink: 1,
@@ -240,7 +241,7 @@ export default function HomePage() {
         )}
 
         {tab === 'stats' && (
-          <div className="body">
+          <div className="body scrollbar">
             <div className="section-label">by category</div>
             <div className="stat-block">
               {CATEGORIES.map(cat => {
@@ -260,11 +261,15 @@ export default function HomePage() {
         )}
 
         {tab === 'config' && (
-          <div className="body">
+          <div className="body scrollbar">
             <div className="section-label">account</div>
             <div className="setting-row">
               <span className="setting-key">// logged in as</span>
               <span className="setting-val">you</span>
+            </div>
+            <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowExport(true)}>
+              <span className="setting-key">// export tasks</span>
+              <span className="setting-val">→</span>
             </div>
             <div className="setting-row" style={{ cursor: 'pointer' }}
               onClick={() => supabase.auth.signOut()}>
@@ -320,6 +325,13 @@ export default function HomePage() {
           onToggle={(id) => updateTask(id, { done: !detail.done })}
           onDelete={deleteTask}
           onUpdate={updateTask}
+        />
+      )}
+
+      {showExport && (
+        <ExportSheet
+          tasks={tasks}
+          onClose={() => setShowExport(false)}
         />
       )}
     </div>

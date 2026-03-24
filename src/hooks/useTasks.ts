@@ -162,12 +162,10 @@ export function useTasks(userId: string | null) {
 
       const merged: Task[] = []
 
-      // All remote tasks — these are ground truth
       for (const remoteTask of remote ?? []) {
         const localTask = localMap.get(remoteTask.id)
 
         if (localTask) {
-          // Both exist — check for pending UPDATE that's newer than remote
           const hasPendingUpdate = queue.some(
             op => op.type === 'UPDATE' && op.payload.id === remoteTask.id
           )
@@ -176,21 +174,16 @@ export function useTasks(userId: string | null) {
             const remoteTime = new Date(remoteTask.updated_at).getTime()
             merged.push(localTime > remoteTime ? localTask : remoteTask as Task)
           } else {
-            // No local pending change — trust remote
             merged.push(remoteTask as Task)
           }
         } else {
           merged.push(remoteTask as Task)
         }
       }
-
-      // Only keep local-only tasks that have a pending INSERT
-      // (created offline, not yet pushed to Supabase)
       for (const [id, localTask] of localMap) {
         if (!remoteMap.has(id) && pendingInsertIds.has(id)) {
           merged.push(localTask)
         }
-        // If local-only and NOT in queue → was deleted on another device → discard
       }
 
       merged.sort((a, b) =>
@@ -247,6 +240,7 @@ export function useTasks(userId: string | null) {
             await setLocalTask(t)
           }
           if (payload.eventType === 'DELETE') {
+            console.log('[realtime] DELETE received — old:', payload.old)
             setTasks(prev => prev.filter(x => x.id !== payload.old.id))
             await deleteLocalTask(payload.old.id)
           }
