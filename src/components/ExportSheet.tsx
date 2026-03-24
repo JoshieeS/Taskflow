@@ -4,12 +4,12 @@ import { useState, useRef } from 'react'
 import type { Task } from '@/types'
 
 interface ExportSheetProps {
-  tasks  : Task[]
+  tasks: Task[]
   onClose: () => void
 }
 
 type DateFilter = 'today' | 'tomorrow' | 'next week' | 'someday' | 'all' | 'pending' | 'done'
-type GroupBy    = 'none' | 'priority' | 'category'
+type GroupBy = 'none' | 'priority' | 'category'
 
 function toISO(date: Date): string {
   const y = date.getFullYear()
@@ -25,43 +25,49 @@ function getTomorrowISO(): string {
 }
 
 function getNextWeekRange(): { start: string; end: string } {
-  const start = new Date()
-  start.setDate(start.getDate() + 1) // from tomorrow
-  const end = new Date()
-  end.setDate(end.getDate() + 7)
+  const now = new Date();
+  const start = new Date(now);
+  const daysUntilSunday = 7 - now.getDay();
+  start.setDate(now.getDate() + daysUntilSunday);
+  console.log(start)
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  console.log(end)
+
   return { start: toISO(start), end: toISO(end) }
 }
 
 function formatDue(due: string): string {
   if (['someday'].includes(due)) return due
-  const todayISO    = toISO(new Date())
+  const todayISO = toISO(new Date())
   const tomorrowISO = getTomorrowISO()
-  if (due === 'today' || due === todayISO)       return 'today'
-  if (due === tomorrowISO)                        return 'tomorrow'
+  if (due === 'today' || due === todayISO) return 'today'
+  if (due === tomorrowISO) return 'tomorrow'
   const date = new Date(due + 'T00:00:00')
   if (isNaN(date.getTime())) return due
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toLowerCase()
 }
 
 function buildExport(
-  tasks      : Task[],
-  dateFilter : DateFilter,
-  groupBy    : GroupBy,
+  tasks: Task[],
+  dateFilter: DateFilter,
+  groupBy: GroupBy,
   includeDone: boolean
 ): string {
-  const todayISO    = toISO(new Date())
+  const todayISO = toISO(new Date())
   const tomorrowISO = getTomorrowISO()
-  const nextWeek    = getNextWeekRange()
+  const nextWeek = getNextWeekRange()
 
   let filtered = tasks.filter(t => {
-    if (dateFilter === 'all')      return true
-    if (dateFilter === 'pending')  return !t.done
-    if (dateFilter === 'done')     return t.done
+    if (dateFilter === 'all') return true
+    if (dateFilter === 'pending') return !t.done
+    if (dateFilter === 'done') return t.done
 
     if (dateFilter === 'today') {
       // today = legacy 'today' string OR today's ISO OR overdue
       if (t.due === 'someday') return false
-      if (t.due === 'today')   return true
+      if (t.due === 'today') return true
       if (t.due.match(/^\d{4}-\d{2}-\d{2}$/)) return t.due <= todayISO
       return false
     }
@@ -72,9 +78,9 @@ function buildExport(
     }
 
     if (dateFilter === 'next week') {
-      // next week = ISO dates in the next 7 days (excluding today)
-      if (!t.due.match(/^\d{4}-\d{2}-\d{2}$/)) return false
-      return t.due > todayISO && t.due <= nextWeek.end
+      if (!t.due.match(/^\d{4}-\d{2}-\d{2}$/)) return false;
+      // Use >= start and < end for a clean Sunday-to-Sunday window
+      return t.due >= nextWeek.start && t.due < nextWeek.end;
     }
 
     if (dateFilter === 'someday') return t.due === 'someday'
@@ -95,10 +101,10 @@ function buildExport(
     : `taskflow — ${dateFilter} tasks`
 
   const bullet = (task: Task) => {
-    const status  = task.done ? '✓' : '○'
-    const due     = formatDue(task.due)
+    const status = task.done ? '✓' : '○'
+    const due = formatDue(task.due)
     const duePart = due !== 'today' ? ` [${due}]` : ''
-    const notes   = task.notes ? `\n     ${task.notes}` : ''
+    const notes = task.notes ? `\n     ${task.notes}` : ''
     return `${status} ${task.title}${duePart}${notes}`
   }
 
@@ -111,7 +117,7 @@ function buildExport(
   }
 
   if (groupBy === 'priority') {
-    const order    = ['high', 'medium', 'low']
+    const order = ['high', 'medium', 'low']
     const sections = order
       .map(p => {
         const group = filtered.filter(t => t.priority === p)
@@ -123,7 +129,7 @@ function buildExport(
   }
 
   if (groupBy === 'category') {
-    const cats     = [...new Set(filtered.map(t => t.category))]
+    const cats = [...new Set(filtered.map(t => t.category))]
     const sections = cats.map(c => {
       const group = filtered.filter(t => t.category === c)
       return `• ${c}\n${group.map(t => `  ${bullet(t)}`).join('\n')}`
@@ -135,11 +141,11 @@ function buildExport(
 }
 
 export default function ExportSheet({ tasks, onClose }: ExportSheetProps) {
-  const [closing,     setClosing]     = useState(false)
-  const [dateFilter,  setDateFilter]  = useState<DateFilter>('today')
-  const [groupBy,     setGroupBy]     = useState<GroupBy>('none')
+  const [closing, setClosing] = useState(false)
+  const [dateFilter, setDateFilter] = useState<DateFilter>('today')
+  const [groupBy, setGroupBy] = useState<GroupBy>('none')
   const [includeDone, setIncludeDone] = useState(false)
-  const [copied,      setCopied]      = useState(false)
+  const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const close = () => {
@@ -168,17 +174,16 @@ export default function ExportSheet({ tasks, onClose }: ExportSheetProps) {
   }
 
   const DATE_FILTERS: { id: DateFilter; label: string }[] = [
-    { id: 'today',     label: 'today'     },
-    { id: 'tomorrow',  label: 'tomorrow'  },
+    { id: 'today', label: 'today' },
+    { id: 'tomorrow', label: 'tomorrow' },
     { id: 'next week', label: 'next week' },
-    { id: 'someday',   label: 'someday'   },
-    { id: 'pending',   label: 'pending'   },
-    { id: 'done',      label: 'done'      },
-    { id: 'all',       label: 'all'       },
+    { id: 'someday', label: 'someday' },
+    { id: 'pending', label: 'pending' },
+    { id: 'all', label: 'all' },
   ]
 
   const GROUP_OPTIONS: { id: GroupBy; label: string }[] = [
-    { id: 'none',     label: 'none'     },
+    { id: 'none', label: 'none' },
     { id: 'priority', label: 'priority' },
     { id: 'category', label: 'category' },
   ]
@@ -253,31 +258,31 @@ export default function ExportSheet({ tasks, onClose }: ExportSheetProps) {
 
         <div className="form-block" style={{ marginTop: 10 }}>
           <div className="form-label">preview</div>
-          <pre 
+          <pre
             style={{
-            fontFamily:  'var(--mono)',
-            fontSize:     11,
-            color:       'var(--text)',
-            background:  'var(--surface)',
-            border:      '1px solid var(--border)',
-            borderRadius: 4,
-            padding:      14,
-            marginTop:    6,
-            whiteSpace:  'pre-wrap',
-            wordBreak:   'break-word',
-            lineHeight:   1.8,
-            maxHeight:    220,
-            overflowY:   'auto',
-          }}>
+              fontFamily: 'var(--mono)',
+              fontSize: 11,
+              color: 'var(--text)',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              padding: 14,
+              marginTop: 6,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.8,
+              maxHeight: 220,
+              overflowY: 'auto',
+            }}>
             {exported}
           </pre>
         </div>
 
         <div style={{
-          fontFamily:   'var(--mono)',
-          fontSize:      10,
-          color:        'var(--muted)',
-          padding:      '10px 24px 20px',
+          fontFamily: 'var(--mono)',
+          fontSize: 10,
+          color: 'var(--muted)',
+          padding: '10px 24px 20px',
           letterSpacing: '0.04em',
         }}>
           // {taskCount} tasks · tap copy to clipboard
