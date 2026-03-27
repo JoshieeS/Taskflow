@@ -12,6 +12,14 @@ import {
   clearPendingOp,
 } from '@/lib/Offlinestore'
 import type { Task, NewTask } from '@/types'
+import { Json } from '@/types/database.types'
+
+function toDbTask(task: Task) {
+  return {
+    ...task,
+    subtasks: task.subtasks as unknown as Json,
+  }
+}
 
 export function useTasks(userId: string | null) {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -289,7 +297,7 @@ export function useTasks(userId: string | null) {
     setTasks(prev => [task, ...prev])
     await setLocalTask(task)
     if (navigator.onLine) {
-      const { error } = await supabase.from('tasks').insert(task)
+      const { error } = await supabase.from('tasks').insert(toDbTask(task))
       if (error) console.error('[addTask]', error.message)
     } else {
       await addToPendingQueue({

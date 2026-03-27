@@ -8,6 +8,7 @@ export interface SubTask {
   done         : boolean
   ai_generated : boolean  
   created_at   : string   
+  [key: string]: string | boolean | undefined
 }
 
 export interface Task {
