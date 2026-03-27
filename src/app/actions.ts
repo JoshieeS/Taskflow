@@ -2,15 +2,22 @@
 'use server'
 
 import webpush from 'web-push'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 
 // This runs once when the module loads on the server.
 // It configures the web-push library with your identity and keys.
 webpush.setVapidDetails(
-  'mailto:joshuaarindha@gmail.com',         
+  'mailto:joshuaarindha@gmail.com',
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 )
+
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SECRET_KEY!,
+  )
+}
 
 // ── SUBSCRIBE ────────────────────────────────────────────────────────────────
 // Called when a user grants notification permission in the browser.
@@ -26,14 +33,14 @@ type SerializedSubscription = {
 }
 
 export async function subscribeUser(sub: SerializedSubscription, userId: string) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = getServiceClient()
   if (!userId) throw new Error('Not authenticated')
 
   // Keys are already plain base64 strings — no getKey() or ArrayBuffer needed
   await supabase.from('push_subscriptions').upsert({
-    user_id:  userId,
+    user_id: userId,
     endpoint: sub.endpoint,
-    p256dh:   sub.keys.p256dh,
+    p256dh: sub.keys.p256dh,
     auth_key: sub.keys.auth,
   }, { onConflict: 'endpoint' })
 
@@ -44,7 +51,7 @@ export async function subscribeUser(sub: SerializedSubscription, userId: string)
 // Called when a user turns off notifications in your settings tab.
 
 export async function unsubscribeUser(endpoint: string, userId: string) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = getServiceClient()
   if (!userId) throw new Error('Not authenticated')
 
   await supabase
@@ -60,46 +67,27 @@ export async function unsubscribeUser(endpoint: string, userId: string) {
 // Called by the cron job at 7:30am GST.
 // Fetches today's pending tasks and pushes a summary to all user devices.
 
-export async function sendMorningDigest(userId: string) {
-  const supabase = await createServerSupabaseClient()
-
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('title, priority')
-    .eq('user_id', userId)
-    .eq('due', 'today')
-    .eq('done', false)
+async function pushToUser(userId: string, payload: object) {
+  const supabase = getServiceClient()
 
   const { data: subs } = await supabase
     .from('push_subscriptions')
     .select('*')
     .eq('user_id', userId)
 
-  // Nothing to do if no tasks or no subscriptions
-  if (!tasks?.length || !subs?.length) return
+  if (!subs?.length) return
 
-  const count  = tasks.length
-  const urgent = tasks.filter(t => t.priority === 'high').length
+  const message = JSON.stringify(payload)
 
-  const payload = JSON.stringify({
-    title: `taskflow — ${count} task${count !== 1 ? 's' : ''} today`,
-    body:  urgent > 0 ? `${urgent} urgent` : 'have a productive day',
-    icon:  '/icon-192x192.png',
-    url:   '/',
-  })
-
-  // Send to every registered device for this user in parallel
   await Promise.all(
     subs.map(sub =>
       webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } },
-        payload
-      ).catch(err => {
-        // A 410 Gone response means the subscription is no longer valid —
-        // the user uninstalled the app or revoked permission at the OS level.
-        // We delete the dead subscription so it doesn't clog the table.
+        message
+      ).catch(async err => {
         if (err.statusCode === 410) {
-          supabase
+          // Subscription expired — clean it up
+          await supabase
             .from('push_subscriptions')
             .delete()
             .eq('endpoint', sub.endpoint)
@@ -107,4 +95,69 @@ export async function sendMorningDigest(userId: string) {
       })
     )
   )
+}
+
+// ── MORNING DIGEST ──────────────────────────────────────────────────────────
+export async function sendMorningDigest(userId: string) {
+  const supabase = getServiceClient()
+
+  const todayISO = new Date().toISOString().split('T')[0]
+
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('title, priority, due')
+    .eq('user_id', userId)
+    .eq('done', false)
+    .or(`due.eq.today,due.eq.${todayISO},and(due.lt.${todayISO},due.not.eq.someday)`)
+
+  const count = tasks?.length ?? 0
+  const urgent = tasks?.filter(t => t.priority === 'high').length ?? 0
+
+  if (count === 0) return  // nothing to report
+
+  await pushToUser(userId, {
+    title: `taskflow — ${count} task${count !== 1 ? 's' : ''} today`,
+    body: urgent > 0 ? `${urgent} urgent · good morning` : 'good morning',
+    icon: '/icon-192x192.png',
+    url: '/',
+  })
+}
+
+// ── EVENING REVIEW ──────────────────────────────────────────────────────────
+export async function sendEveningDigest(userId: string) {
+  const supabase = getServiceClient()
+
+  const todayISO = new Date().toISOString().split('T')[0]
+
+  // Tasks completed today
+  const { data: doneTasks } = await supabase
+    .from('tasks')
+    .select('title')
+    .eq('user_id', userId)
+    .eq('done', true)
+    .or(`due.eq.today,due.eq.${todayISO}`)
+
+  // Tasks still pending today
+  const { data: pendingTasks } = await supabase
+    .from('tasks')
+    .select('title')
+    .eq('user_id', userId)
+    .eq('done', false)
+    .or(`due.eq.today,due.eq.${todayISO}`)
+
+  const done = doneTasks?.length ?? 0
+  const pending = pendingTasks?.length ?? 0
+
+  const body = done === 0 && pending === 0
+    ? 'nothing scheduled today'
+    : done > 0 && pending === 0
+      ? `all ${done} task${done !== 1 ? 's' : ''} done · great work`
+      : `${done} done · ${pending} remaining`
+
+  await pushToUser(userId, {
+    title: 'taskflow — end of day',
+    body,
+    icon: '/icon-192x192.png',
+    url: '/',
+  })
 }

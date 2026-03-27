@@ -23,7 +23,7 @@ export function useTasks(userId: string | null) {
 
   const supabase = createBrowserClient()
   const syncing = useRef(false)
-  
+
   const tasksRef = useRef<Task[]>([])
   tasksRef.current = tasks
 
@@ -248,12 +248,34 @@ export function useTasks(userId: string | null) {
       )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Re-fetch latest data to catch any missed updates
+        supabase
+          .from('tasks')
+          .select('*')
+          .eq('user_id', userId!)
+          .order('created_at', { ascending: false })
+          .then(({ data }) => {
+            if (data) {
+              setTasks(data as Task[])
+              setLocalTasks(data as Task[])
+            }
+          })
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => { 
+      supabase.removeChannel(channel) 
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [userId])
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
-  const addTask = useCallback(async (newTask: NewTask) => {
+  const addTask = useCallback(async (newTask: NewTask): Promise<string | void> => {
     if (!userId) return
 
     const now = new Date().toISOString()
@@ -264,11 +286,8 @@ export function useTasks(userId: string | null) {
       created_at: now,
       updated_at: now,
     }
-
-    // Optimistic
     setTasks(prev => [task, ...prev])
     await setLocalTask(task)
-
     if (navigator.onLine) {
       const { error } = await supabase.from('tasks').insert(task)
       if (error) console.error('[addTask]', error.message)
@@ -280,6 +299,7 @@ export function useTasks(userId: string | null) {
         timestamp: Date.now(),
       })
     }
+    return task.id
   }, [userId])
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {

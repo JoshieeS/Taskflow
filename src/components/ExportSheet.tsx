@@ -198,9 +198,19 @@ export default function ExportSheet({ tasks, onClose }: ExportSheetProps) {
       className={`overlay${closing ? ' closing' : ''}`}
       onClick={e => { if (e.target === e.currentTarget) close() }}
     >
-      <div className={`sheet${closing ? ' closing' : ''}`}>
-        <div className="sheet-handle" />
-        <div className="sheet-header">
+      <div
+        className={`sheet${closing ? ' closing' : ''}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',   
+          height: '80dvh',
+        }}
+      >
+        <div className="sheet-handle" style={{ flexShrink: 0 }} />
+
+        {/* Header — fixed, never scrolls */}
+        <div className="sheet-header" style={{ flexShrink: 0 }}>
           <button className="sheet-btn cancel" onClick={close}>close</button>
           <span className="sheet-title">export tasks</span>
           <button
@@ -212,77 +222,84 @@ export default function ExportSheet({ tasks, onClose }: ExportSheetProps) {
           </button>
         </div>
 
-        <div className="form-block" style={{ marginTop: 16 }}>
-          <div className="form-label">which tasks</div>
-          <div className="chip-row">
-            {DATE_FILTERS.map(f => (
+        <div style={{ flexShrink: 0 }}>
+          <div className="form-block" style={{ marginTop: 14 }}>
+            <div className="form-label">which tasks</div>
+            <div className="chip-row">
+              {DATE_FILTERS.map(f => (
+                <button
+                  key={f.id}
+                  className={`chip${dateFilter === f.id ? ' selected' : ''}`}
+                  onClick={() => setDateFilter(f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-block" style={{ marginTop: 12 }}>
+            <div className="form-label">group by</div>
+            <div className="chip-row">
+              {GROUP_OPTIONS.map(g => (
+                <button
+                  key={g.id}
+                  className={`chip${groupBy === g.id ? ' selected' : ''}`}
+                  onClick={() => setGroupBy(g.id)}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-block" style={{ marginTop: 12 }}>
+            <div className="form-label">include completed</div>
+            <div className="chip-row">
               <button
-                key={f.id}
-                className={`chip${dateFilter === f.id ? ' selected' : ''}`}
-                onClick={() => setDateFilter(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="form-block" style={{ marginTop: 16 }}>
-          <div className="form-label">group by</div>
-          <div className="chip-row">
-            {GROUP_OPTIONS.map(g => (
+                className={`chip${!includeDone ? ' selected' : ''}`}
+                onClick={() => setIncludeDone(false)}
+              >pending only</button>
               <button
-                key={g.id}
-                className={`chip${groupBy === g.id ? ' selected' : ''}`}
-                onClick={() => setGroupBy(g.id)}
-              >
-                {g.label}
-              </button>
-            ))}
+                className={`chip${includeDone ? ' selected' : ''}`}
+                onClick={() => setIncludeDone(true)}
+              >include done</button>
+            </div>
+          </div>
+
+          <div style={{ padding: '12px 24px 4px' }}>
+            <div className="form-label">preview</div>
           </div>
         </div>
+        <pre
+          className="scrollbar"
+          style={{
+            flex: '1 1 0%',
+            minHeight: 0,
+            overflowY: 'auto',
+            margin: '0 24px',
+            padding: 14,
+            fontFamily: 'var(--mono)',
+            fontSize: 11,
+            color: 'var(--text)',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            lineHeight: 1.8,
+          }}
+        >
+          {exported}
+        </pre>
 
-        <div className="form-block" style={{ marginTop: 16 }}>
-          <div className="form-label">include completed</div>
-          <div className="chip-row">
-            <button
-              className={`chip${!includeDone ? ' selected' : ''}`}
-              onClick={() => setIncludeDone(false)}
-            >pending only</button>
-            <button
-              className={`chip${includeDone ? ' selected' : ''}`}
-              onClick={() => setIncludeDone(true)}
-            >include done</button>
-          </div>
-        </div>
-
-        <div className="form-block" style={{ marginTop: 10 }}>
-          <div className="form-label">preview</div>
-          <pre
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              color: 'var(--text)',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              padding: 14,
-              marginTop: 6,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              lineHeight: 1.8,
-              maxHeight: 220,
-              overflowY: 'auto',
-            }}>
-            {exported}
-          </pre>
-        </div>
-
+        {/* Footer — fixed at bottom */}
         <div style={{
+          flexShrink: 0,
           fontFamily: 'var(--mono)',
           fontSize: 10,
           color: 'var(--muted)',
-          padding: '10px 24px 20px',
+          padding: '8px 24px 16px',
           letterSpacing: '0.04em',
         }}>
           // {taskCount} tasks · tap copy to clipboard

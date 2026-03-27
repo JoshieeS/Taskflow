@@ -10,8 +10,10 @@ import AddSheet from '@/components/AddSheet'
 import DetailSheet from '@/components/DetailSheet'
 import type { Task, TabId } from '@/types'
 import { subscribeUser, unsubscribeUser } from '@/app/actions'
+import NotificationSettings from '@/components/NotificationSettings'
 import AuthScreen from '@/components/AuthScreen'
 import ExportSheet from '@/components/ExportSheet'
+import BugReport from '@/components/BugReport'
 
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 
@@ -39,6 +41,7 @@ export default function HomePage() {
   const [authReady, setAuthReady] = useState(false)
   const [notifStatus, setNotifStatus] = useState<NotifStatus>('idle')
   const [userName, setUserName] = useState<string>('')
+  const [showBugReport, setShowBugReport] = useState(false)
   // UI state
   const [tab, setTab] = useState<TabId>('pending')
   const [filter, setFilter] = useState<'today' | 'all'>('today')
@@ -271,33 +274,21 @@ export default function HomePage() {
               <span className="setting-key">// export tasks</span>
               <span className="setting-val">→</span>
             </div>
+            <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowBugReport(true)}>
+              <span className="setting-key">// report a bug or have suggestions?</span>
+              <span className="setting-val">→</span>
+            </div>
             <div className="setting-row" style={{ cursor: 'pointer' }}
               onClick={() => supabase.auth.signOut()}>
               <span className="setting-key">// sign out</span>
               <span className="setting-val">→</span>
             </div>
-            <div className="section-label" style={{ marginTop: 20 }}>notifications</div>
-            <div className="setting-row">
-              <span className="setting-key">// morning digest</span>
-              <span className="setting-val">07:30 GST</span>
-            </div>
-            <div
-              className="setting-row"
-              style={{ cursor: 'pointer' }}
-              onClick={handleNotificationToggle}
-            >
-              <span className="setting-key">// push alerts</span>
-              <span className="setting-val">
-                {notifStatus === 'subscribed' ? 'on →' :
-                  notifStatus === 'unsupported' ? 'unsupported' :
-                    notifStatus === 'denied' ? 'blocked' : 'off →'}
-              </span>
-            </div>
-            {notifStatus === 'denied' && (
-              <div style={{ fontSize: 11, color: 'var(--muted)', paddingBottom: 12, fontFamily: 'var(--mono)' }}>
-        // enable in browser settings to receive digests
-              </div>
-            )}
+            
+            <NotificationSettings
+              userId={userId}
+              notifStatus={notifStatus}
+              onToggleNotifs={handleNotificationToggle}
+            />
             <div className="section-label" style={{ marginTop: 20 }}>sync</div>
             <div className="setting-row">
               <span className="setting-key">// provider</span>
@@ -333,6 +324,10 @@ export default function HomePage() {
           tasks={tasks}
           onClose={() => setShowExport(false)}
         />
+      )}
+
+      {showBugReport && (
+        <BugReport onClose={() => setShowBugReport(false)} userId={userId} />
       )}
     </div>
   )
