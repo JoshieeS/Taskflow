@@ -29,19 +29,6 @@ function isInCurrentWindow(prefTime: string, nowInUserTz: string): boolean {
   return prefMins >= windowStart && prefMins < windowStart + 30
 }
 
-async function query(sql: string, params: string[] = []) {
-  const res = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
-    method: 'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${serviceKey}`,
-      'apikey':        serviceKey,
-    },
-    body: JSON.stringify({ query: sql, params }),
-  })
-  return res.json()
-}
-
 async function supabaseFetch(path: string) {
   const res = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
     headers: {
@@ -52,7 +39,14 @@ async function supabaseFetch(path: string) {
   return res.json()
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req: Request) => {
+  // Manual auth check — verify the caller passes the service role key
+  // (verify_jwt is disabled because the new sb_secret_ key format isn't JWT)
+  const authHeader = req.headers.get('Authorization') ?? ''
+  if (authHeader !== `Bearer ${serviceKey}`) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
   const now = new Date()
 
   const subs  = await supabaseFetch('push_subscriptions?select=user_id')
