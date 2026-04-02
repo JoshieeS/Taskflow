@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { Task, SubTask } from '@/types'
 import DatePicker, { resolveQuickOption } from '@/components/DatePicker'
-import { enhanceTaskInBackground } from '@/lib/AiTaskEnhancer'
+import { enhanceTaskInBackground } from '@/lib/aiTaskEnhancer'
 import TaskTimer from './TaskTimer'
 
 const PRIORITY_DOTS: Record<string, string> = {
