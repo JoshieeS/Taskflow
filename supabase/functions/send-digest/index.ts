@@ -39,14 +39,7 @@ async function supabaseFetch(path: string) {
   return res.json()
 }
 
-Deno.serve(async (req: Request) => {
-  // Manual auth check — verify the caller passes the service role key
-  // (verify_jwt is disabled because the new sb_secret_ key format isn't JWT)
-  const authHeader = req.headers.get('Authorization') ?? ''
-  if (authHeader !== `Bearer ${serviceKey}`) {
-    return new Response('Unauthorized', { status: 401 })
-  }
-
+Deno.serve(async () => {
   const now = new Date()
 
   const subs  = await supabaseFetch('push_subscriptions?select=user_id')

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { NewTask, SubTask } from '@/types'
 import DatePicker, { resolveQuickOption } from '@/components/DatePicker'
 import { extractDateFromTitle } from '@/lib/DateParser'
-import { enhanceTaskInBackground } from '@/lib/aiTaskEnhancer'
+import { enhanceTaskInBackground } from '@/lib/AiTaskEnhancer'
 
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 const PRIORITIES = ['high', 'medium', 'low'] as const
@@ -19,6 +19,7 @@ const INITIAL_FORM: NewTask = {
   subtasks: [],
   ai_enhanced: false,
   ai_title: false,
+  time_spent_seconds: 0,
 }
 
 interface AddSheetProps {

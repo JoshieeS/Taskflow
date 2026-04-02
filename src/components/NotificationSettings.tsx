@@ -1,21 +1,3 @@
-// THEORY: Per-user notification scheduling
-//
-// Vercel cron jobs run on a fixed schedule — you can't create one cron
-// per user. The solution is to run the cron frequently (every 30 min)
-// and have the API route check which users' preferred time falls within
-// the current 30-minute window.
-//
-// User stores: { morning_time: "07:30", evening_time: "21:00", timezone: "Asia/Qatar" }
-// Cron fires: every 30 minutes
-// API checks: convert now() to each user's timezone, see if it matches their time
-//
-// THEORY: Timezone handling
-//
-// We store the user's IANA timezone string (e.g. "Asia/Qatar") not a UTC offset.
-// UTC offsets change with daylight saving — IANA names don't.
-// The browser gives us the timezone via Intl.DateTimeFormat().resolvedOptions().timeZone
-// We store it once on first save and allow the user to change it.
-
 'use client'
 
 import { useState, useEffect } from 'react'

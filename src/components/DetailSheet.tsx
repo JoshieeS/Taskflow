@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import type { Task, SubTask } from '@/types'
 import DatePicker, { resolveQuickOption } from '@/components/DatePicker'
-import { enhanceTaskInBackground } from '@/lib/aiTaskEnhancer'
+import { enhanceTaskInBackground } from '@/lib/AiTaskEnhancer'
+import TaskTimer from './TaskTimer'
 
 const PRIORITY_DOTS: Record<string, string> = {
   high: '#c0392b', medium: '#b7791f', low: '#2d6a4f',
@@ -233,6 +234,14 @@ export default function DetailSheet({
               <span className="detail-key">status</span>
               <span className="detail-val">{task.done ? 'complete' : 'pending'}</span>
             </div>
+            <TaskTimer
+              taskId={task.id}
+              timeSpentSeconds={task.time_spent_seconds ?? 0}
+              onSave={(additionalSeconds) => {
+                const newTotal = Math.max(0, (task.time_spent_seconds ?? 0) + additionalSeconds);
+                onUpdate(task.id, { time_spent_seconds: newTotal });
+              }}
+            />
             {task.notes && <div className="detail-note">// {task.notes}</div>}
 
             {/* ── SUBTASKS SECTION ── */}

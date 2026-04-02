@@ -10,6 +10,8 @@ interface NavProps {
 const NAV_ITEMS: { id: TabId; label: string; icon: string }[] = [
   { id: 'pending',  label: 'pending',  icon: '✓' },
   { id: 'done',    label: 'done',    icon: '≡' },
+  { id: 'cart', label: 'shared', icon: '⊡' },
+  { id: 'calendar', label: 'calendar', icon: '▦' },
   { id: 'stats',  label: 'stats',  icon: '◦' },
   { id: 'config', label: 'config', icon: '⚙' },
 ]
@@ -24,7 +26,6 @@ export default function Nav({ activeTab, onTabChange }: NavProps) {
           className={`nav-item${activeTab === item.id ? ' active' : ''}`}
           onClick={() => onTabChange(item.id)}
           aria-label={item.label}
-          // aria-current marks the active page for screen readers
           aria-current={activeTab === item.id ? 'page' : undefined}
         >
           <span className="nav-item-icon">{item.icon}</span>

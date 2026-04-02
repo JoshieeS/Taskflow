@@ -92,8 +92,8 @@ export function useTasks(userId: string | null) {
                 const { data: remoteTask } = await supabase
                   .from('tasks').select('*').eq('id', op.payload.id).single()
                 if (remoteTask) {
-                  await setLocalTask(remoteTask as Task)
-                  setTasks(prev => prev.map(t => t.id === remoteTask.id ? remoteTask as Task : t))
+                  await setLocalTask(remoteTask as unknown as Task)
+                  setTasks(prev => prev.map(t => t.id === remoteTask.id ? remoteTask as unknown as Task : t))
                 }
               }
             }
@@ -180,12 +180,12 @@ export function useTasks(userId: string | null) {
           if (hasPendingUpdate) {
             const localTime = new Date(localTask.updated_at).getTime()
             const remoteTime = new Date(remoteTask.updated_at).getTime()
-            merged.push(localTime > remoteTime ? localTask : remoteTask as Task)
+            merged.push(localTime > remoteTime ? localTask : remoteTask as unknown as Task)
           } else {
-            merged.push(remoteTask as Task)
+            merged.push(remoteTask as unknown as Task)
           }
         } else {
-          merged.push(remoteTask as Task)
+          merged.push(remoteTask as unknown as Task)
         }
       }
       for (const [id, localTask] of localMap) {
@@ -266,8 +266,8 @@ export function useTasks(userId: string | null) {
           .order('created_at', { ascending: false })
           .then(({ data }) => {
             if (data) {
-              setTasks(data as Task[])
-              setLocalTasks(data as Task[])
+              setTasks(data as unknown as Task[])
+              setLocalTasks(data as unknown as Task[])
             }
           })
       }

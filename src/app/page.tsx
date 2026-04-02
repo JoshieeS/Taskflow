@@ -14,6 +14,11 @@ import NotificationSettings from '@/components/NotificationSettings'
 import AuthScreen from '@/components/AuthScreen'
 import ExportSheet from '@/components/ExportSheet'
 import BugReport from '@/components/BugReport'
+import ThemePicker from '@/components/ThemePicker'
+import CalendarView from '@/components/CalenderView'
+import AISummary from '@/components/AiSummary'
+import PushDebugPanel from '@/components/PushDebugPanel'
+import SharedCart from '@/components/SharedCart'
 
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 
@@ -60,7 +65,6 @@ export default function HomePage() {
         supabase.auth.signOut()
         setUserId(null)
         setAuthReady(true)
-        return
       }
 
       setUserId(session?.user.id ?? null)
@@ -152,35 +156,59 @@ export default function HomePage() {
     const registration = await navigator.serviceWorker.ready
 
     if (notifStatus === 'subscribed') {
+      // Unsubscribe
       const sub = await registration.pushManager.getSubscription()
       if (sub) {
         await sub.unsubscribe()
-        if (!userId) return
-        await unsubscribeUser(sub.endpoint, userId)  // ← add userId
+        if (userId) {
+          await fetch('/api/save-subscription', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: sub.endpoint, userId }),
+          })
+        }
       }
       setNotifStatus('idle')
       return
     }
 
-    // Request permission — this shows the browser's native prompt
+    // Request permission
     const permission = await Notification.requestPermission()
     if (permission === 'denied') {
       setNotifStatus('denied')
       return
     }
+    if (permission !== 'granted') return
+
+    // Convert VAPID key to Uint8Array
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+    const padding = '='.repeat((4 - vapidKey.length % 4) % 4)
+    const base64 = (vapidKey + padding).replace(/-/g, '+').replace(/_/g, '/')
+    const rawData = window.atob(base64)
+    const keyArray = new Uint8Array(rawData.length)
+    for (let i = 0; i < rawData.length; i++) keyArray[i] = rawData.charCodeAt(i)
 
     // Subscribe
     const sub = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(
-        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
-      ),
+      applicationServerKey: keyArray,
     })
 
-    // Send subscription to server for storage
-    if (!userId) return
-    await subscribeUser(JSON.parse(JSON.stringify(sub)), userId)
-    setNotifStatus('subscribed')
+    // Save via Route Handler (not Server Action)
+    const serialized = JSON.parse(JSON.stringify(sub))
+    const res = await fetch('/api/save-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sub: serialized, userId }),
+    })
+    const result = await res.json()
+    console.log('[notifications] save result:', result)
+
+    if (result.ok) {
+      setNotifStatus('subscribed')
+    } else {
+      console.error('[notifications] save failed:', result.reason)
+    }
   }
 
   // ── Not ready yet ──────────────────────────────────────────────────────
@@ -243,8 +271,22 @@ export default function HomePage() {
           </div>
         )}
 
+        {tab === 'cart' && (
+          <SharedCart userId={userId} />
+        )}
+
+        {tab === 'calendar' && (
+          <CalendarView
+            tasks={tasks}
+            onClick={task => setDetail(task)}
+          />
+        )}
+
         {tab === 'stats' && (
           <div className="body scrollbar">
+            <div className="body" style={{ paddingBottom: '10px' }}>
+              <AISummary tasks={todayTasks} scope='today' />
+            </div>
             <div className="section-label">by category</div>
             <div className="stat-block">
               {CATEGORIES.map(cat => {
@@ -278,12 +320,13 @@ export default function HomePage() {
               <span className="setting-key">// report a bug or have suggestions?</span>
               <span className="setting-val">→</span>
             </div>
-            <div className="setting-row" style={{ cursor: 'pointer' }}
+            <ThemePicker userId={userId} />
+            <div className="setting-row" style={{ cursor: 'pointer', marginTop: 20 }}
               onClick={() => supabase.auth.signOut()}>
               <span className="setting-key">// sign out</span>
               <span className="setting-val">→</span>
             </div>
-            
+           
             <NotificationSettings
               userId={userId}
               notifStatus={notifStatus}
@@ -329,6 +372,8 @@ export default function HomePage() {
       {showBugReport && (
         <BugReport onClose={() => setShowBugReport(false)} userId={userId} />
       )}
+
+
     </div>
   )
 }

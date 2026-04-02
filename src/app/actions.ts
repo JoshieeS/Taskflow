@@ -1,22 +1,20 @@
-// src/app/actions.ts
-//
-// Server actions for push subscription management.
-// Digest notifications (morning/evening) are now handled by
-// the Supabase Edge Function `send-digest`, triggered via pg_cron.
 'use server'
 
+import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
+
+webpush.setVapidDetails(
+  `mailto:${process.env.NEXT_PUBLIC_VAPID_EMAIL}`,
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
+)
 
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY!,
+    process.env.SERVICE_ROLE_KEY!,
   )
 }
-
-// ── SUBSCRIBE ────────────────────────────────────────────────────────────────
-// Called when a user grants notification permission in the browser.
-// Receives the PushSubscription object from the browser and stores it.
 
 type SerializedSubscription = {
   endpoint: string
@@ -28,32 +26,51 @@ type SerializedSubscription = {
 }
 
 export async function subscribeUser(sub: SerializedSubscription, userId: string) {
+  console.log('[subscribeUser] called for userId:', userId)
+  console.log('[subscribeUser] endpoint:', sub.endpoint.slice(0, 60) + '...')
+ 
+  if (!userId) {
+    console.error('[subscribeUser] no userId provided')
+    throw new Error('Not authenticated')
+  }
+ 
+  if (!sub.keys?.p256dh || !sub.keys?.auth) {
+    console.error('[subscribeUser] missing keys:', sub.keys)
+    throw new Error('Invalid subscription keys')
+  }
+ 
   const supabase = getServiceClient()
-  if (!userId) throw new Error('Not authenticated')
-
-  // Keys are already plain base64 strings — no getKey() or ArrayBuffer needed
-  await supabase.from('push_subscriptions').upsert({
-    user_id: userId,
-    endpoint: sub.endpoint,
-    p256dh: sub.keys.p256dh,
-    auth_key: sub.keys.auth,
-  }, { onConflict: 'endpoint' })
-
+ 
+  const { data, error } = await supabase
+    .from('push_subscriptions')
+    .upsert({
+      user_id:  userId,
+      endpoint: sub.endpoint,
+      p256dh:   sub.keys.p256dh,
+      auth_key: sub.keys.auth,
+    }, { onConflict: 'endpoint' })
+    .select()
+ 
+  if (error) {
+    console.error('[subscribeUser] DB error:', error)
+    throw new Error(error.message)
+  }
+ 
+  console.log('[subscribeUser] saved successfully:', data)
   return { success: true }
 }
-
-// ── UNSUBSCRIBE ───────────────────────────────────────────────────────────────
-// Called when a user turns off notifications in your settings tab.
-
+ 
 export async function unsubscribeUser(endpoint: string, userId: string) {
-  const supabase = getServiceClient()
   if (!userId) throw new Error('Not authenticated')
-
-  await supabase
+ 
+  const supabase = getServiceClient()
+ 
+  const { error } = await supabase
     .from('push_subscriptions')
     .delete()
     .eq('user_id', userId)
     .eq('endpoint', endpoint)
-
+ 
+  if (error) console.error('[unsubscribeUser]', error)
   return { success: true }
 }
