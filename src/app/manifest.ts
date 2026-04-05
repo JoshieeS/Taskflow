@@ -14,13 +14,13 @@ export default function manifest(): MetadataRoute.Manifest {
                 src: '/icon-192x192.png',
                 sizes: '192x192',
                 type: 'image/png',
-                purpose: 'any',        // ← Chrome install prompt requires this
+                purpose: 'any',       
             },
             {
                 src: '/icon-192x192.png',
                 sizes: '192x192',
                 type: 'image/png',
-                purpose: 'maskable',   // ← Android adaptive icons require this
+                purpose: 'maskable',  
             },
             {
                 src: '/icon-512x512.png',

@@ -9,7 +9,6 @@ import TaskRow from '@/components/TaskRow'
 import AddSheet from '@/components/AddSheet'
 import DetailSheet from '@/components/DetailSheet'
 import type { Task, TabId } from '@/types'
-import { subscribeUser, unsubscribeUser } from '@/app/actions'
 import NotificationSettings from '@/components/NotificationSettings'
 import AuthScreen from '@/components/AuthScreen'
 import ExportSheet from '@/components/ExportSheet'
@@ -17,8 +16,8 @@ import BugReport from '@/components/BugReport'
 import ThemePicker from '@/components/ThemePicker'
 import CalendarView from '@/components/CalenderView'
 import AISummary from '@/components/AiSummary'
-import PushDebugPanel from '@/components/PushDebugPanel'
 import SharedCart from '@/components/SharedCart'
+import LoadingScreen from '@/components/LoadingScreen'
 
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 
@@ -39,25 +38,20 @@ function urlBase64ToUint8Array(base64String: string) {
 
 export default function HomePage() {
   const supabase = createBrowserClient()
-
-
-  // Auth state — null = not checked yet, object = logged in, false = logged out
   const [userId, setUserId] = useState<string | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [notifStatus, setNotifStatus] = useState<NotifStatus>('idle')
   const [userName, setUserName] = useState<string>('')
   const [showBugReport, setShowBugReport] = useState(false)
-  // UI state
   const [tab, setTab] = useState<TabId>('pending')
   const [filter, setFilter] = useState<'today' | 'all'>('today')
   const [showAdd, setShowAdd] = useState(false)
   const [detail, setDetail] = useState<Task | null>(null)
   const [showExport, setShowExport] = useState(false)
-  // Real-time tasks from our custom hook
   const { tasks, loading, addTask, updateTask, deleteTask, isOnline } = useTasks(userId)
-  console.log(showAdd)
+  const appReady = authReady && (!userId || !loading)
 
-  // ── Get User Details ──────────────────────────────────────────────────────
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error?.message?.includes('Refresh Token Not Found') ||
@@ -211,169 +205,163 @@ export default function HomePage() {
     }
   }
 
-  // ── Not ready yet ──────────────────────────────────────────────────────
-  if (!authReady) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>
-      loading...
-    </div>
-  )
-
-  // ── Login screen ───────────────────────────────────────────────────────
-  if (!userId) return <AuthScreen />
-
-  // ── Main app ───────────────────────────────────────────────────────────
   return (
-    <div className="shell">
-      <Nav activeTab={tab} onTabChange={setTab} />
-
-      <main className="main">
-        {!isOnline && (
-          <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '8px 24px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em', }}>
+    <>
+      <LoadingScreen ready={appReady} />
+      {authReady && !userId && <AuthScreen />}
+      {authReady && userId && (
+        <div className="shell">
+          <Nav activeTab={tab} onTabChange={setTab} />
+          <main className="main">
+            {!isOnline && (
+              <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '8px 24px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em', }}>
             // offline — changes will sync when reconnected
-          </div>
-        )}
-        <Header
-          tab={tab}
-          filter={filter}
-          onFilterChange={setFilter}
-          pendingCount={pendingToday.length}
-          doneCount={doneToday.length}
-          urgentCount={tasks.filter(t => t.priority === 'high' && !t.done).length}
-          progress={progress}
-          userName={userName}
-        />
-
-        {(tab === 'pending' || tab === 'done') && (
-          <div className="body scrollbar"
-            style={{
-              flexGrow: 1,
-              flexShrink: 1,
-              flexBasis: '0%',
-              minHeight: 0,
-              overflowY: 'auto',
-              padding: '0 24px 80px',
-            }}>
-            {loading ? (
-              <div className="empty">loading...</div>
-            ) : displayed.length === 0 ? (
-              <div className="empty">— nothing here —</div>
-            ) : (
-              displayed.map((task, i) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  delay={i * 0.04}
-                  onToggle={() => updateTask(task.id, { done: !task.done })}
-                  onClick={() => setDetail(task)}
-                />
-              ))
+              </div>
             )}
-          </div>
-        )}
-
-        {tab === 'cart' && (
-          <SharedCart userId={userId} />
-        )}
-
-        {tab === 'calendar' && (
-          <CalendarView
-            tasks={tasks}
-            onClick={task => setDetail(task)}
-          />
-        )}
-
-        {tab === 'stats' && (
-          <div className="body scrollbar">
-            <div className="body" style={{ paddingBottom: '10px' }}>
-              <AISummary tasks={todayTasks} scope='today' />
-            </div>
-            <div className="section-label">by category</div>
-            <div className="stat-block">
-              {CATEGORIES.map(cat => {
-                const all = tasks.filter(t => t.category === cat)
-                const done = all.filter(t => t.done).length
-                const pct = all.length ? Math.round((done / all.length) * 100) : 0
-                return (
-                  <div key={cat} className="stat-row">
-                    <span className="stat-cat">{cat}</span>
-                    <div className="stat-bar-wrap"><div className="stat-bar" style={{ width: `${pct}%` }} /></div>
-                    <span className="stat-fraction">{done}/{all.length}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {tab === 'config' && (
-          <div className="body scrollbar">
-            <div className="section-label">account</div>
-            <div className="setting-row">
-              <span className="setting-key">// logged in as</span>
-              <span className="setting-val">you</span>
-            </div>
-            <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowExport(true)}>
-              <span className="setting-key">// export tasks</span>
-              <span className="setting-val">→</span>
-            </div>
-            <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowBugReport(true)}>
-              <span className="setting-key">// report a bug or have suggestions?</span>
-              <span className="setting-val">→</span>
-            </div>
-            <ThemePicker userId={userId} />
-            <div className="setting-row" style={{ cursor: 'pointer', marginTop: 20 }}
-              onClick={() => supabase.auth.signOut()}>
-              <span className="setting-key">// sign out</span>
-              <span className="setting-val">→</span>
-            </div>
-           
-            <NotificationSettings
-              userId={userId}
-              notifStatus={notifStatus}
-              onToggleNotifs={handleNotificationToggle}
+            <Header
+              tab={tab}
+              filter={filter}
+              onFilterChange={setFilter}
+              pendingCount={pendingToday.length}
+              doneCount={doneToday.length}
+              urgentCount={tasks.filter(t => t.priority === 'high' && !t.done).length}
+              progress={progress}
+              userName={userName}
             />
-            <div className="section-label" style={{ marginTop: 20 }}>sync</div>
-            <div className="setting-row">
-              <span className="setting-key">// provider</span>
-              <span className="setting-val">supabase</span>
-            </div>
-            <div className="setting-row">
-              <span className="setting-key">// realtime</span>
-              <span className="setting-val">enabled</span>
-            </div>
-          </div>
-        )}
-      </main>
 
-      <button className="fab" onClick={() => setShowAdd(true)} aria-label="Add task">+</button>
+            {(tab === 'pending' || tab === 'done') && (
+              <div className="body scrollbar"
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: '0%',
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  padding: '0 24px 80px',
+                }}>
+                {loading ? (
+                  <div className="empty">loading...</div>
+                ) : displayed.length === 0 ? (
+                  <div className="empty">— nothing here —</div>
+                ) : (
+                  displayed.map((task, i) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      delay={i * 0.04}
+                      onToggle={() => updateTask(task.id, { done: !task.done })}
+                      onClick={() => setDetail(task)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
 
-      {showAdd && (
-        <AddSheet onClose={() => setShowAdd(false)} onAdd={addTask} />
+            {tab === 'cart' && (
+              <SharedCart userId={userId} />
+            )}
+
+            {tab === 'calendar' && (
+              <CalendarView
+                tasks={tasks}
+                onClick={task => setDetail(task)}
+              />
+            )}
+
+            {tab === 'stats' && (
+              <div className="body scrollbar">
+                <div className="body" style={{ paddingBottom: '10px' }}>
+                  <AISummary tasks={todayTasks} scope='today' />
+                </div>
+                <div className="section-label">by category</div>
+                <div className="stat-block">
+                  {CATEGORIES.map(cat => {
+                    const all = tasks.filter(t => t.category === cat)
+                    const done = all.filter(t => t.done).length
+                    const pct = all.length ? Math.round((done / all.length) * 100) : 0
+                    return (
+                      <div key={cat} className="stat-row">
+                        <span className="stat-cat">{cat}</span>
+                        <div className="stat-bar-wrap"><div className="stat-bar" style={{ width: `${pct}%` }} /></div>
+                        <span className="stat-fraction">{done}/{all.length}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {tab === 'config' && (
+              <div className="body scrollbar">
+                <div className="section-label">account</div>
+                <div className="setting-row">
+                  <span className="setting-key">// logged in as</span>
+                  <span className="setting-val">you</span>
+                </div>
+                <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowExport(true)}>
+                  <span className="setting-key">// export tasks</span>
+                  <span className="setting-val">→</span>
+                </div>
+                <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowBugReport(true)}>
+                  <span className="setting-key">// report a bug or have suggestions?</span>
+                  <span className="setting-val">→</span>
+                </div>
+                <ThemePicker userId={userId} />
+                <div className="setting-row" style={{ cursor: 'pointer', marginTop: 20 }}
+                  onClick={() => supabase.auth.signOut()}>
+                  <span className="setting-key">// sign out</span>
+                  <span className="setting-val">→</span>
+                </div>
+
+                <NotificationSettings
+                  userId={userId}
+                  notifStatus={notifStatus}
+                  onToggleNotifs={handleNotificationToggle}
+                />
+                <div className="section-label" style={{ marginTop: 20 }}>sync</div>
+                <div className="setting-row">
+                  <span className="setting-key">// provider</span>
+                  <span className="setting-val">supabase</span>
+                </div>
+                <div className="setting-row">
+                  <span className="setting-key">// realtime</span>
+                  <span className="setting-val">enabled</span>
+                </div>
+              </div>
+            )}
+          </main>
+
+          <button className="fab" onClick={() => setShowAdd(true)} aria-label="Add task">+</button>
+
+          {showAdd && (
+            <AddSheet onClose={() => setShowAdd(false)} onAdd={addTask} />
+          )}
+
+          {detail && (
+            <DetailSheet
+              task={detail}
+              tasks={tasks}
+              onClose={() => setDetail(null)}
+              onToggle={(id) => updateTask(id, { done: !detail.done })}
+              onDelete={deleteTask}
+              onUpdate={updateTask}
+            />
+          )}
+
+          {showExport && (
+            <ExportSheet
+              tasks={tasks}
+              onClose={() => setShowExport(false)}
+            />
+          )}
+
+          {showBugReport && (
+            <BugReport onClose={() => setShowBugReport(false)} userId={userId} />
+          )}
+
+
+        </div>
       )}
-
-      {detail && (
-        <DetailSheet
-          task={detail}
-          tasks={tasks}
-          onClose={() => setDetail(null)}
-          onToggle={(id) => updateTask(id, { done: !detail.done })}
-          onDelete={deleteTask}
-          onUpdate={updateTask}
-        />
-      )}
-
-      {showExport && (
-        <ExportSheet
-          tasks={tasks}
-          onClose={() => setShowExport(false)}
-        />
-      )}
-
-      {showBugReport && (
-        <BugReport onClose={() => setShowBugReport(false)} userId={userId} />
-      )}
-
-
-    </div>
+    </>
   )
 }
