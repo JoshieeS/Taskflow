@@ -15,9 +15,10 @@ import ExportSheet from '@/components/ExportSheet'
 import BugReport from '@/components/BugReport'
 import ThemePicker from '@/components/ThemePicker'
 import CalendarView from '@/components/CalenderView'
-import AISummary from '@/components/AiSummary'
 import SharedCart from '@/components/SharedCart'
 import LoadingScreen from '@/components/LoadingScreen'
+import { applyTheme, saveTheme, THEMES } from '@/components/ThemePicker'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 const CATEGORIES = ['personal', 'work', 'health', 'finance', 'learning'] as const
 
@@ -65,6 +66,22 @@ export default function HomePage() {
       const meta = session?.user?.user_metadata
       setUserName(meta?.name ?? meta?.full_name ?? meta?.email ?? '')
       setAuthReady(true)
+
+      if (session?.user?.id) {
+        supabase
+          .from('user_preferences')
+          .select('color_palette')
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+          .then(async ({ data }) => {
+            const themeId = data?.color_palette ?? 'default'
+            const theme = THEMES.find(t => t.id === themeId)
+            if (theme) {
+              applyTheme(theme)
+              await saveTheme(themeId)  // syncs cookie + localStorage
+            }
+          })
+      }
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -72,6 +89,22 @@ export default function HomePage() {
         setUserId(session?.user.id ?? null)
         const meta = session?.user?.user_metadata
         setUserName(meta?.name ?? meta?.full_name ?? meta?.email ?? '')
+
+        if (session?.user?.id) {
+          supabase
+            .from('user_preferences')
+            .select('color_palette')
+            .eq('user_id', session.user.id)
+            .maybeSingle()
+            .then(async ({ data }) => {
+              const themeId = data?.color_palette ?? 'default'
+              const theme = THEMES.find(t => t.id === themeId)
+              if (theme) {
+                applyTheme(theme)
+                await saveTheme(themeId)
+              }
+            })
+        }
       }
     )
 
@@ -206,162 +239,161 @@ export default function HomePage() {
   }
 
   return (
-    <>
-      <LoadingScreen ready={appReady} />
-      {authReady && !userId && <AuthScreen />}
-      {authReady && userId && (
-        <div className="shell">
-          <Nav activeTab={tab} onTabChange={setTab} />
-          <main className="main">
-            {!isOnline && (
-              <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '8px 24px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em', }}>
+    <ErrorBoundary>
+      <>
+        <LoadingScreen ready={appReady} />
+        {authReady && !userId && <AuthScreen />}
+        {authReady && userId && (
+          <div className="shell">
+            <Nav activeTab={tab} onTabChange={setTab} />
+            <main className="main">
+              {!isOnline && (
+                <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '8px 24px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em', }}>
             // offline — changes will sync when reconnected
-              </div>
-            )}
-            <Header
-              tab={tab}
-              filter={filter}
-              onFilterChange={setFilter}
-              pendingCount={pendingToday.length}
-              doneCount={doneToday.length}
-              urgentCount={tasks.filter(t => t.priority === 'high' && !t.done).length}
-              progress={progress}
-              userName={userName}
-            />
+                </div>
+              )}
+              <Header
+                tab={tab}
+                filter={filter}
+                onFilterChange={setFilter}
+                pendingCount={pendingToday.length}
+                doneCount={doneToday.length}
+                urgentCount={tasks.filter(t => t.priority === 'high' && !t.done).length}
+                progress={progress}
+                userName={userName}
+              />
 
-            {(tab === 'pending' || tab === 'done') && (
-              <div className="body scrollbar"
-                style={{
-                  flexGrow: 1,
-                  flexShrink: 1,
-                  flexBasis: '0%',
-                  minHeight: 0,
-                  overflowY: 'auto',
-                  padding: '0 24px 80px',
-                }}>
-                {loading ? (
-                  <div className="empty">loading...</div>
-                ) : displayed.length === 0 ? (
-                  <div className="empty">— nothing here —</div>
-                ) : (
-                  displayed.map((task, i) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      delay={i * 0.04}
-                      onToggle={() => updateTask(task.id, { done: !task.done })}
-                      onClick={() => setDetail(task)}
-                    />
-                  ))
-                )}
-              </div>
+              {(tab === 'pending' || tab === 'done') && (
+                <div className="body scrollbar"
+                  style={{
+                    flexGrow: 1,
+                    flexShrink: 1,
+                    flexBasis: '0%',
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    padding: '0 24px 80px',
+                  }}>
+                  {loading ? (
+                    <div className="empty">loading...</div>
+                  ) : displayed.length === 0 ? (
+                    <div className="empty">— nothing here —</div>
+                  ) : (
+                    displayed.map((task, i) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        delay={i * 0.04}
+                        onToggle={() => updateTask(task.id, { done: !task.done })}
+                        onClick={() => setDetail(task)}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+
+              {tab === 'cart' && (
+                <SharedCart userId={userId} />
+              )}
+
+              {tab === 'calendar' && (
+                <CalendarView
+                  tasks={tasks}
+                  onClick={task => setDetail(task)}
+                />
+              )}
+
+              {tab === 'stats' && (
+                <div className="body scrollbar">
+                  <div className="section-label">by category</div>
+                  <div className="stat-block">
+                    {CATEGORIES.map(cat => {
+                      const all = tasks.filter(t => t.category === cat)
+                      const done = all.filter(t => t.done).length
+                      const pct = all.length ? Math.round((done / all.length) * 100) : 0
+                      return (
+                        <div key={cat} className="stat-row">
+                          <span className="stat-cat">{cat}</span>
+                          <div className="stat-bar-wrap"><div className="stat-bar" style={{ width: `${pct}%` }} /></div>
+                          <span className="stat-fraction">{done}/{all.length}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'config' && (
+                <div className="body scrollbar">
+                  <div className="section-label">account</div>
+                  <div className="setting-row">
+                    <span className="setting-key">// logged in as</span>
+                    <span className="setting-val">you</span>
+                  </div>
+                  <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowExport(true)}>
+                    <span className="setting-key">// export tasks</span>
+                    <span className="setting-val">→</span>
+                  </div>
+                  <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowBugReport(true)}>
+                    <span className="setting-key">// report a bug or have suggestions?</span>
+                    <span className="setting-val">→</span>
+                  </div>
+                  <ThemePicker userId={userId} />
+                  <div className="setting-row" style={{ cursor: 'pointer', marginTop: 20 }}
+                    onClick={() => supabase.auth.signOut()}>
+                    <span className="setting-key">// sign out</span>
+                    <span className="setting-val">→</span>
+                  </div>
+
+                  <NotificationSettings
+                    userId={userId}
+                    notifStatus={notifStatus}
+                    onToggleNotifs={handleNotificationToggle}
+                  />
+                  <div className="section-label" style={{ marginTop: 20 }}>sync</div>
+                  <div className="setting-row">
+                    <span className="setting-key">// provider</span>
+                    <span className="setting-val">supabase</span>
+                  </div>
+                  <div className="setting-row">
+                    <span className="setting-key">// realtime</span>
+                    <span className="setting-val">enabled</span>
+                  </div>
+                </div>
+              )}
+            </main>
+
+            <button className="fab" onClick={() => setShowAdd(true)} aria-label="Add task">+</button>
+
+            {showAdd && (
+              <AddSheet onClose={() => setShowAdd(false)} onAdd={addTask} />
             )}
 
-            {tab === 'cart' && (
-              <SharedCart userId={userId} />
-            )}
-
-            {tab === 'calendar' && (
-              <CalendarView
+            {detail && (
+              <DetailSheet
+                task={detail}
                 tasks={tasks}
-                onClick={task => setDetail(task)}
+                onClose={() => setDetail(null)}
+                onToggle={(id) => updateTask(id, { done: !detail.done })}
+                onDelete={deleteTask}
+                onUpdate={updateTask}
               />
             )}
 
-            {tab === 'stats' && (
-              <div className="body scrollbar">
-                <div className="body" style={{ paddingBottom: '10px' }}>
-                  <AISummary tasks={todayTasks} scope='today' />
-                </div>
-                <div className="section-label">by category</div>
-                <div className="stat-block">
-                  {CATEGORIES.map(cat => {
-                    const all = tasks.filter(t => t.category === cat)
-                    const done = all.filter(t => t.done).length
-                    const pct = all.length ? Math.round((done / all.length) * 100) : 0
-                    return (
-                      <div key={cat} className="stat-row">
-                        <span className="stat-cat">{cat}</span>
-                        <div className="stat-bar-wrap"><div className="stat-bar" style={{ width: `${pct}%` }} /></div>
-                        <span className="stat-fraction">{done}/{all.length}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+            {showExport && (
+              <ExportSheet
+                tasks={tasks}
+                onClose={() => setShowExport(false)}
+              />
             )}
 
-            {tab === 'config' && (
-              <div className="body scrollbar">
-                <div className="section-label">account</div>
-                <div className="setting-row">
-                  <span className="setting-key">// logged in as</span>
-                  <span className="setting-val">you</span>
-                </div>
-                <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowExport(true)}>
-                  <span className="setting-key">// export tasks</span>
-                  <span className="setting-val">→</span>
-                </div>
-                <div className="setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowBugReport(true)}>
-                  <span className="setting-key">// report a bug or have suggestions?</span>
-                  <span className="setting-val">→</span>
-                </div>
-                <ThemePicker userId={userId} />
-                <div className="setting-row" style={{ cursor: 'pointer', marginTop: 20 }}
-                  onClick={() => supabase.auth.signOut()}>
-                  <span className="setting-key">// sign out</span>
-                  <span className="setting-val">→</span>
-                </div>
-
-                <NotificationSettings
-                  userId={userId}
-                  notifStatus={notifStatus}
-                  onToggleNotifs={handleNotificationToggle}
-                />
-                <div className="section-label" style={{ marginTop: 20 }}>sync</div>
-                <div className="setting-row">
-                  <span className="setting-key">// provider</span>
-                  <span className="setting-val">supabase</span>
-                </div>
-                <div className="setting-row">
-                  <span className="setting-key">// realtime</span>
-                  <span className="setting-val">enabled</span>
-                </div>
-              </div>
+            {showBugReport && (
+              <BugReport onClose={() => setShowBugReport(false)} userId={userId} />
             )}
-          </main>
-
-          <button className="fab" onClick={() => setShowAdd(true)} aria-label="Add task">+</button>
-
-          {showAdd && (
-            <AddSheet onClose={() => setShowAdd(false)} onAdd={addTask} />
-          )}
-
-          {detail && (
-            <DetailSheet
-              task={detail}
-              tasks={tasks}
-              onClose={() => setDetail(null)}
-              onToggle={(id) => updateTask(id, { done: !detail.done })}
-              onDelete={deleteTask}
-              onUpdate={updateTask}
-            />
-          )}
-
-          {showExport && (
-            <ExportSheet
-              tasks={tasks}
-              onClose={() => setShowExport(false)}
-            />
-          )}
-
-          {showBugReport && (
-            <BugReport onClose={() => setShowBugReport(false)} userId={userId} />
-          )}
 
 
-        </div>
-      )}
-    </>
+          </div>
+        )}
+      </>
+    </ErrorBoundary>
   )
 }
